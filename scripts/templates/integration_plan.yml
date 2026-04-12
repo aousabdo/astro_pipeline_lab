@@ -1,0 +1,24 @@
+# Integration plan template -- copy into object's master/ folder as integration_vN.yml
+# Created when combining multiple nights on the same target.
+
+version: 1
+object: CATALOGID_CommonName
+
+sessions:
+  - YYYY-MM-DD_instrument_config
+
+excluded: []
+  # - session: YYYY-MM-DD_instrument_config
+  #   reason: gradient mismatch
+
+reference_session: null           # which session to align others to
+
+stretch: siril_ghs
+finishing:
+  denoise: off                    # off | light | moderate
+  sharpen: off                    # off | light | moderate
+  veralux: off                    # off | optional
+
+output: null                      # e.g. M51_combined_linear_v1.fit
+
+notes: null

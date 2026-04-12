@@ -1,0 +1,76 @@
+############################################
+# Post-Process: Star Cluster (Clean)
+#
+# Takes a stacked linear master and produces a
+# clean, natural star cluster image.
+#
+# Siril >= 1.4.0 required
+#
+# USAGE:
+#   siril-cli -s postprocess_cluster.ssf -d <session>/work
+#
+# EXPECTS:
+#   result.fit in the working directory
+#
+# PHILOSOPHY:
+#   Clusters are about clean, round, colorful stars.
+#   No aggressive sharpening. No heavy stretch.
+#   Preserve star colors. Avoid bloating.
+############################################
+
+requires 1.4.0
+
+set32bits
+
+load result
+
+###############################################
+# PHASE 1: LINEAR DOMAIN
+###############################################
+
+autocrop
+
+# Light background extraction. Clusters have less
+# faint extended structure to worry about.
+subsky 3 -dither -samples=25 -tolerance=1.0
+
+platesolve
+spcc
+
+# No deconvolution for clusters by default.
+# Sharpening stars risks creating artifacts and rings.
+# Uncomment only if stars are visibly soft:
+# makepsf stars -sym
+# rl -alpha=6000 -iters=5 -tv
+
+save ../output/linear_master
+
+###############################################
+# PHASE 2: NONLINEAR DOMAIN
+# Moderate stretch. Don't blow out bright stars.
+###############################################
+
+# Pass 1: gentle reveal
+ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=1.0 -human
+
+# Pass 2: lift midtones, protect bright star cores
+ght -D=1.5 -B=1 -SP=0.15 -LP=0 -HP=0.75 -human
+
+###############################################
+# PHASE 3: FINISHING (minimal)
+###############################################
+
+# Light saturation to bring out star colors
+# (blue giants, red giants, yellow dwarfs)
+satu 0.30 1
+
+# Denoise very lightly if needed
+# denoise -mod=0.3
+
+save ../output/stretched_master
+
+savetif ../output/final -deflate
+savejpg ../output/final 95
+savepng ../output/final
+
+close

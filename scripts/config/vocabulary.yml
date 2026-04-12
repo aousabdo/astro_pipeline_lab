@@ -1,0 +1,39 @@
+# Controlled vocabulary -- use ONLY these values in manifests and configs.
+# Scripts depend on consistent naming. Don't drift.
+
+categories:
+  - galaxy
+  - nebula
+  - cluster
+  - comet
+  - widefield
+  - moon_planet
+
+instruments:
+  - origin
+  - c11
+  - askar103
+
+optical_configs:
+  - native
+  - reducer
+  - hyperstar
+  - flattener
+  - barlow
+
+quality_levels:
+  - excellent
+  - good
+  - acceptable
+  - poor
+  - unknown
+
+# Session naming: YYYY-MM-DD_instrument_config
+# Example:        2026-04-12_origin_native
+
+# Object naming:  CATALOGID_CommonName
+# Example:        M51_Whirlpool, NGC7000_North_America
+
+# Booleans:       true / false (not yes/no)
+# Unknown values: null (not "n/a" or empty string)
+# Versions:       v1, v2, v3 (never "final_final")

@@ -1,0 +1,44 @@
+galaxy_conservative:
+  gradient_removal: careful
+  deconvolution: mild
+  stretch: controlled           # siril GHS, protect highlights, slow halo reveal
+  saturation: low
+  denoise: off
+  sharpen: off
+  veralux: off
+
+nebula_balanced:
+  gradient_removal: moderate
+  deconvolution: mild
+  stretch: stronger             # more midtone boost OK
+  saturation: medium
+  denoise: light
+  sharpen: light
+  veralux: optional
+
+cluster_clean:
+  gradient_removal: light
+  deconvolution: off
+  stretch: moderate
+  saturation: low
+  denoise: light
+  sharpen: light
+  veralux: off
+
+comet_soft:
+  gradient_removal: careful
+  deconvolution: off
+  stretch: gentle
+  saturation: low
+  denoise: minimal
+  sharpen: off
+  veralux: off
+
+fast_tiff:
+  gradient_removal: moderate
+  deconvolution: off
+  stretch: moderate
+  saturation: low
+  denoise: light
+  sharpen: off
+  veralux: off

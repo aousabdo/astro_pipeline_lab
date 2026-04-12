@@ -1,0 +1,56 @@
+# ============================================
+# Astro Pipeline Lab .gitignore
+# ============================================
+
+# ----- Raw data (too large for git) -----
+raw/
+calibration/
+
+# ----- Processing intermediates -----
+**/work/process/
+**/work/masters/
+**/work/*.seq
+**/work/*.fit
+**/work/*.fits
+**/work/*.fts
+**/intermediate/
+**/stacked/
+
+# ----- Large output files -----
+# Track the scripts and config, not the images.
+# Use git-lfs or external storage for masters.
+**/output/*.fit
+**/output/*.fits
+**/output/*.tif
+**/output/*.tiff
+**/output/*.png
+**/output/*.jpg
+**/master/*.fit
+**/master/*.fits
+**/master/*.tif
+**/master/*.tiff
+**/exports/*.tif
+**/exports/*.tiff
+**/exports/*.png
+**/exports/*.jpg
+
+# ----- OS junk -----
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ----- Python -----
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ----- Siril temp files -----
+*.seq
+*.com
+
+# ----- gstack -----
+.gstack/

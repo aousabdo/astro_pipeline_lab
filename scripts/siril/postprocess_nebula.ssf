@@ -1,0 +1,115 @@
+############################################
+# Post-Process: Nebula Balanced
+#
+# Takes a stacked linear master and produces a
+# stretched, color-rich emission nebula image.
+#
+# Siril >= 1.4.0 required (GHT, denoise, SPCC)
+#
+# USAGE:
+#   siril-cli -s postprocess_nebula.ssf -d <session>/work
+#
+# EXPECTS:
+#   result.fit in the working directory (output of preprocess script)
+#
+# OUTPUTS in <session>/output/:
+#   <object>_linear.fit       -- processed linear master
+#   <object>_stretched.fit    -- stretched result
+#   <object>_final.tif        -- 16-bit TIFF export
+#   <object>_final.jpg        -- JPEG for sharing
+#   <object>_final.png        -- PNG for sharing
+#
+# PHILOSOPHY:
+#   Nebulae tolerate more aggressive processing than galaxies.
+#   Push contrast and saturation harder. Protect fine filaments.
+#   Color richness is the goal.
+############################################
+
+requires 1.4.0
+
+set32bits
+
+load result
+
+###############################################
+# PHASE 1: LINEAR DOMAIN
+###############################################
+
+# --- 1. Crop ---
+autocrop
+
+# --- 2. Background extraction ---
+# More aggressive than galaxy script.
+# Nebulae can have very faint extensions that blend with
+# sky background, but we need the gradient out.
+# degree=4 with tighter tolerance and more samples.
+subsky 4 -dither -samples=35 -tolerance=0.8
+
+# --- 3. Plate solve + Color calibration ---
+platesolve
+spcc
+
+# --- 4. Deconvolution ---
+# Slightly more aggressive than galaxy script.
+# Nebula filaments benefit from sharpening.
+# iters=15: more iterations OK for nebulae
+# alpha=4000: slightly less regularization (sharper result)
+makepsf blind -l0
+rl -alpha=4000 -iters=15 -tv
+
+# Save linear checkpoint
+save ../output/linear_master
+
+###############################################
+# PHASE 2: NONLINEAR DOMAIN
+# Nebulae can take a harder stretch.
+###############################################
+
+# --- 5. GHS Stretch ---
+# Stronger than galaxy. Push midtones to reveal structure.
+
+# Pass 1: strong initial stretch, bring up faint nebulosity
+ght -D=2.5 -B=1 -SP=0.0 -LP=0 -HP=1.0 -human
+
+# Pass 2: boost midtones aggressively
+ght -D=2.0 -B=3 -SP=0.15 -LP=0 -HP=0.90 -human
+
+# Pass 3: fine-tune contrast in the mid-range
+ght -D=1.5 -B=2 -SP=0.30 -LP=0.05 -HP=0.85 -human
+
+###############################################
+# PHASE 3: FINISHING
+# More aggressive finishing OK for nebulae.
+###############################################
+
+# --- 6. Saturation ---
+# Nebulae look great with rich color.
+# amount=0.50 is a 50% boost. Stronger than galaxies.
+satu 0.50 1
+
+# --- 7. Star reduction (optional) ---
+# Nebula images often benefit from smaller stars
+# to let the nebula structure dominate.
+# Requires StarNet++ installed and configured in Siril.
+# Uncomment if you have StarNet installed:
+# starnet -stretch
+
+# --- 8. Green noise removal ---
+# More commonly needed for broadband nebula images.
+rmgreen 1 0.5
+
+# --- 9. Denoise ---
+# Moderate denoise OK for nebulae (less fine structure at risk
+# than galaxy dust lanes).
+# mod=0.6: 60% denoised / 40% original
+denoise -mod=0.6
+
+# Save stretched result
+save ../output/stretched_master
+
+# --- 10. Export ---
+savetif ../output/final -deflate
+savejpg ../output/final 95
+savepng ../output/final
+
+close

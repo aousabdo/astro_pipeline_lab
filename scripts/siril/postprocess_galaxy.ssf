@@ -1,0 +1,151 @@
+############################################
+# Post-Process: Galaxy Conservative
+#
+# Takes a stacked linear master and produces a
+# stretched, color-calibrated galaxy image.
+#
+# Siril >= 1.4.0 required (GHT, denoise, SPCC)
+#
+# USAGE:
+#   siril-cli -s postprocess_galaxy.ssf -d <session>/work
+#
+# EXPECTS:
+#   result.fit in the working directory (output of preprocess script)
+#
+# OUTPUTS in <session>/output/:
+#   <object>_linear.fit       -- processed linear master (before stretch)
+#   <object>_stretched.fit    -- stretched result
+#   <object>_final.tif        -- 16-bit TIFF export
+#   <object>_final.jpg        -- JPEG for sharing
+#   <object>_final.png        -- PNG for sharing
+#
+# PHILOSOPHY:
+#   Galaxies punish overprocessing. Every step is conservative.
+#   Preserve faint outer halos, natural star colors, dust lanes.
+#   Avoid the "plastic smart-scope look" at all costs.
+############################################
+
+requires 1.4.0
+
+set32bits
+
+# Load the stacked master
+load result
+
+###############################################
+# PHASE 1: LINEAR DOMAIN (physics)
+# Everything here happens before stretching.
+# This is where image quality is won or lost.
+###############################################
+
+# --- 1. Crop bad edges ---
+# The stacked image often has soft/misaligned edges from
+# registration. Remove them before background modeling.
+# Autocrop removes zero-value borders from stacking.
+autocrop
+
+# --- 2. Background extraction ---
+# Remove light pollution gradients BEFORE color calibration.
+# For Bortle 8 urban skies this is critical.
+#
+# Using polynomial degree 4: handles complex urban gradients
+# without overfitting to the target itself.
+# samples=30: denser sampling for better gradient model
+# tolerance=1.0: excludes bright objects (galaxy, stars) from model
+subsky 4 -dither -samples=30 -tolerance=1.0
+
+# --- 3. Photometric color calibration ---
+# Plate-solve first (required for PCC/SPCC).
+# Origin FITS headers contain RA/DEC, focal length, pixel size,
+# so platesolve should work without manual coordinates.
+# If it fails, add: platesolve RA,DEC -focal=330 -pixelsize=2.0
+platesolve
+
+# SPCC is preferred over PCC: uses Gaia DR3 spectral data
+# for more accurate color calibration per your actual sensor.
+#
+# If you know your exact sensor model, uncomment and set:
+#   spcc "-oscsensor=IMX585"
+# Otherwise SPCC will use a generic OSC response.
+spcc
+
+# --- 4. Deconvolution (mild) ---
+# Sharpen while still in linear domain. Doing this after
+# stretching amplifies noise, so we do it here.
+#
+# Using blind PSF estimation (lets Siril figure out the PSF
+# from the actual star shapes in this image).
+# Richardson-Lucy with Total Variation regularization
+# prevents noise amplification.
+#
+# Key settings for galaxies:
+#   iters=10: conservative iteration count (more = sharper but riskier)
+#   alpha=5000: moderate regularization (lower = more regularization)
+makepsf blind -l0
+rl -alpha=5000 -iters=10 -tv
+
+# Save the linear master (checkpoint before stretching)
+save ../output/linear_master
+
+###############################################
+# PHASE 2: NONLINEAR DOMAIN (aesthetics)
+# Stretching reveals the image. Go slow.
+###############################################
+
+# --- 5. GHS Stretch ---
+# Generalized Hyperbolic Stretch: the most controllable
+# stretch in Siril. For galaxies, we do multiple gentle
+# passes rather than one aggressive stretch.
+#
+# Parameters explained:
+#   -D=  : stretch intensity (0-10). Lower = gentler.
+#   -B=  : local stretch intensity near symmetry point (-5 to 15)
+#   -SP= : symmetry point (0-1). Where the stretch is strongest.
+#          For galaxies, keep low to reveal faint structure first.
+#   -LP= : shadow preserve. Linear below this point.
+#   -HP= : highlight preserve. Linear above this point.
+#          Protects galaxy core from blowout.
+#   -human: use human-eye weighted luminance (preserves color balance)
+
+# Pass 1: gentle initial stretch, reveal faint outer structure
+ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=1.0 -human
+
+# Pass 2: boost midtones slightly, keep highlights safe
+ght -D=1.5 -B=2 -SP=0.15 -LP=0 -HP=0.85 -human
+
+# Pass 3: fine adjustment, lift faint halo detail
+ght -D=1.0 -B=1 -SP=0.25 -LP=0.05 -HP=0.80 -human
+
+###############################################
+# PHASE 3: FINISHING (light touch only)
+###############################################
+
+# --- 6. Saturation ---
+# Very light saturation boost. Galaxies look best
+# with restrained, natural color.
+# amount=0.25 is a 25% increase. background_factor=1
+# prevents boosting noise in the background.
+satu 0.25 1
+
+# --- 7. Green noise removal ---
+# Usually not needed after proper SPCC, but Origin data
+# sometimes shows slight green cast. Use only if needed.
+# Uncomment the line below if green tint is visible:
+# rmgreen 1 0.5
+
+# --- 8. Denoise (optional, light) ---
+# Only if needed. For galaxies, aggressive denoise
+# destroys dust lanes and faint spiral arms.
+# mod=0.5: blend 50% denoised with 50% original (very conservative)
+# Uncomment if the image is noisy:
+# denoise -mod=0.5
+
+# Save stretched result
+save ../output/stretched_master
+
+# --- 9. Export ---
+savetif ../output/final -deflate
+savejpg ../output/final 95
+savepng ../output/final
+
+close

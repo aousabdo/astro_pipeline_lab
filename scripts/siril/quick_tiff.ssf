@@ -1,0 +1,49 @@
+############################################
+# Quick Process: Origin Stacked TIFF
+#
+# For fast same-night results starting from the
+# Origin's own stacked TIFF output.
+# ~90% quality for ~30% effort.
+#
+# Siril >= 1.4.0 required
+#
+# USAGE:
+#   Copy Origin's stacked TIFF to <session>/work/ as "origin_stack.tif"
+#   siril-cli -s quick_tiff.ssf -d <session>/work
+#
+# OUTPUT:
+#   result_quick.tif / .jpg / .png in <session>/output/
+############################################
+
+requires 1.4.0
+
+set32bits
+
+load origin_stack
+
+autocrop
+
+# Background extraction
+subsky 4 -dither -samples=30 -tolerance=1.0
+
+# Plate solve + color calibration
+# PCC is more forgiving than SPCC on pre-processed data
+platesolve
+pcc
+
+# Single-pass stretch (faster than multi-pass GHS)
+autostretch -linked
+
+# Light saturation
+satu 0.25 1
+
+# Light denoise
+denoise -mod=0.4
+
+save ../output/result_quick
+
+savetif ../output/result_quick -deflate
+savejpg ../output/result_quick 95
+savepng ../output/result_quick
+
+close

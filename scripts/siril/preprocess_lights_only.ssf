@@ -1,0 +1,46 @@
+############################################
+# Preprocess: Lights Only (no darks/flats/bias)
+# For Celestron Origin raw FITS or any OSC data
+# without separate calibration frames.
+#
+# Siril >= 1.3.4 required
+#
+# USAGE:
+#   Place raw FITS light frames in: <session>/work/lights/
+#   Run:  siril-cli -s preprocess_lights_only.ssf -d <session>/work
+#
+# OUTPUT:
+#   result.fit  -- stacked 32-bit master in <session>/work/
+#
+# The Origin does internal dark subtraction, so this
+# script handles the common case where you only have lights.
+############################################
+
+requires 1.3.4
+
+# Use 32-bit for maximum dynamic range
+set32bits
+
+# Convert light frames (auto-detects Bayer pattern from FITS headers)
+cd lights
+convert light -out=../process
+cd ../process
+
+# Register (2-pass for best alignment, homography for field distortion)
+register light -2pass
+seqapplyreg light -framing=min -interp=lanczos4
+
+# Stack with winsorized sigma rejection
+# -norm=addscale: additive + scale normalization (handles sky brightness changes)
+# -weight=noise: weight frames by inverse noise (best frames contribute more)
+# -rgb_equal: equalize channel backgrounds
+# 3 3: sigma low/high rejection thresholds
+stack r_light rej w 3 3 -norm=addscale -weight=noise -rgb_equal -output_norm -32b -out=result
+
+load result
+mirrorx -bottomup
+save ../result_$LIVETIME:%d$s
+save ../result
+
+cd ..
+close

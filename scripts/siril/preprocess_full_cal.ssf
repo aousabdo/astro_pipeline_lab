@@ -1,0 +1,67 @@
+############################################
+# Preprocess: Full Calibration (darks + flats + bias)
+# For C11, Askar 103, or Origin with full calibration set.
+#
+# Siril >= 1.3.4 required
+#
+# USAGE:
+#   Place files in <session>/work/:
+#     lights/    -- raw light FITS
+#     darks/     -- matching dark FITS
+#     flats/     -- flat FITS
+#     biases/    -- bias/offset FITS
+#   Run:  siril-cli -s preprocess_full_cal.ssf -d <session>/work
+#
+# OUTPUT:
+#   result.fit  -- stacked 32-bit master in <session>/work/
+############################################
+
+requires 1.3.4
+
+set32bits
+
+# --- BIAS ---
+cd biases
+convert bias -out=../process
+cd ../process
+stack bias rej 3 3 -nonorm -out=../masters/bias_stacked
+cd ..
+
+# --- DARKS ---
+cd darks
+convert dark -out=../process
+cd ../process
+stack dark rej 3 3 -nonorm -out=../masters/dark_stacked
+cd ..
+
+# --- FLATS ---
+cd flats
+convert flat -out=../process
+cd ../process
+calibrate flat -bias=../masters/bias_stacked
+stack pp_flat rej 3 3 -norm=mul -out=../masters/pp_flat_stacked
+cd ..
+
+# --- LIGHTS ---
+cd lights
+convert light -out=../process
+cd ../process
+
+# Full calibration: dark + flat + cosmetic correction
+# -opt: optimized dark subtraction (requires both bias and dark)
+calibrate light -dark=../masters/dark_stacked -flat=../masters/pp_flat_stacked -cc=dark 3 0 -cfa -equalize_cfa -debayer -opt
+
+# Register (2-pass)
+register pp_light -2pass
+seqapplyreg pp_light -framing=min -interp=lanczos4
+
+# Stack
+stack r_pp_light rej w 3 3 -norm=addscale -weight=noise -output_norm -32b -out=result
+
+load result
+mirrorx -bottomup
+save ../result_$LIVETIME:%d$s
+save ../result
+
+cd ..
+close
