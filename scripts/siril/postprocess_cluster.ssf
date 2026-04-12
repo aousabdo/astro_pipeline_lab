@@ -10,7 +10,7 @@
 #   siril-cli -s postprocess_cluster.ssf -d <session>/work
 #
 # EXPECTS:
-#   result.fit in the working directory
+#   result.fits in the working directory
 #
 # PHILOSOPHY:
 #   Clusters are about clean, round, colorful stars.
@@ -49,14 +49,13 @@ save ../output/linear_master
 # Moderate stretch. Don't blow out bright stars.
 ###############################################
 
-# Pass 1: gentle reveal
-ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=1.0 -human
-
-# Pass 2: lift midtones, protect bright star cores
-ght -D=1.5 -B=1 -SP=0.15 -LP=0 -HP=0.75 -human
+# Autostretch with moderate settings
+# shadowsclip=-2.5: keep some faint background stars visible
+# targetbg=0.20: reasonably dark
+autostretch -linked -2.5 0.20
 
 # Set black point
-linstretch -BP=0.04
+linstretch -BP=0.05
 
 ###############################################
 # PHASE 3: FINISHING (minimal)
@@ -64,7 +63,7 @@ linstretch -BP=0.04
 
 # Light saturation to bring out star colors
 # (blue giants, red giants, yellow dwarfs)
-satu 0.30 1
+satu 0.50 1
 
 # Denoise very lightly if needed
 # denoise -mod=0.3

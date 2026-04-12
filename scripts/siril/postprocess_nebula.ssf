@@ -23,6 +23,8 @@
 #   Nebulae tolerate more aggressive processing than galaxies.
 #   Push contrast and saturation harder. Protect fine filaments.
 #   Color richness is the goal.
+#
+# TESTED on: 134-frame M42 Orion Nebula (Origin, 45s, nebula filter, Bortle 8)
 ############################################
 
 requires 1.4.0
@@ -68,53 +70,61 @@ save ../output/linear_master
 
 ###############################################
 # PHASE 2: NONLINEAR DOMAIN
-# Nebulae can take a harder stretch.
-# Strategy: multiple gentle passes that build up contrast
-# without blowing out the bright nebula core.
+#
+# Strategy: use autostretch for the heavy lifting (it's
+# well-tuned for this), then a mild GHS pass to refine
+# contrast, then linstretch to set a proper black point.
 ###############################################
 
-# --- 4. GHS Stretch ---
-# Pass 1: initial stretch, reveal faint nebulosity.
-# D=2.0 (moderate), SP=0.0 (stretch from shadows up)
-# HP=0.65: protect the bright core early
-ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=0.65 -human
+# --- 4. Autostretch ---
+# -linked: same stretch on all channels (preserves PCC white balance)
+# shadowsclip=-2.0: tighter than default -2.8, pushes background darker
+# targetbg=0.18: darker target background (default=0.25)
+autostretch -linked -2.0 0.18
 
-# Pass 2: boost midtones where the nebula structure lives.
-# SP=0.20: focus stretch on the mid-brightness range
-# HP=0.80: let some highlights come up now
-ght -D=1.8 -B=2 -SP=0.20 -LP=0.02 -HP=0.80 -human
+# --- 5. GHS contrast refinement ---
+# Gentle GHS on top of autostretch to boost midtone contrast
+# where the nebula structure lives.
+# D=0.5: very gentle (already stretched)
+# B=2: boost around the symmetry point
+# SP=0.40: targets the bright midtones (nebula body)
+# LP=0.08: lock the dark sky (don't lift it)
+# HP=0.85: protect the core from further blowout
+ght -D=0.5 -B=2 -SP=0.40 -LP=0.08 -HP=0.85 -human
 
-# Pass 3: fine-tune contrast, bring out faint outer filaments.
-# D=1.2 (gentle), higher SP to work on brighter parts now
-ght -D=1.2 -B=1 -SP=0.35 -LP=0.05 -HP=0.85 -human
-
-# --- 5. Set black point ---
-# After GHS, the background may not be dark enough.
-# linstretch clips the darkest values to true black.
-# BP=0.05 means the bottom 5% of the histogram becomes black.
-linstretch -BP=0.05
+# --- 6. Set black point ---
+# Clip the bottom 8% of the histogram to true black.
+# Ensures the sky background is properly dark.
+linstretch -BP=0.08
 
 ###############################################
 # PHASE 3: FINISHING
 ###############################################
 
-# --- 6. Saturation ---
-# Nebulae look great with rich color.
-# amount=0.60 is a 60% boost. background_factor=1 prevents
+# --- 7. Saturation ---
+# Global saturation: strong. Nebulae need vivid color.
+# amount=1.2 is a 120% boost. background_factor=1 prevents
 # boosting noise in the sky background.
-satu 0.60 1
+satu 1.2 1
 
-# --- 7. Green noise removal ---
-# Commonly needed for broadband/nebula filter data.
-rmgreen 1 0.5
+# Targeted Ha boost: pink-orange range (hue index 0)
+# This brings out hydrogen-alpha emission that PCC tends to flatten.
+satu 0.60 1 0
 
-# --- 8. Denoise ---
-# Moderate denoise OK for nebulae (less fine structure at risk
-# than galaxy dust lanes).
-# mod=0.5: 50% denoised / 50% original
-denoise -mod=0.5
+# Targeted magenta-pink boost (hue index 5) for M42 wings
+satu 0.40 1 5
 
-# --- 9. Star reduction (optional) ---
+# --- 8. Green noise removal ---
+# Run AFTER saturation (sat boost can introduce green cast).
+# amount=0.7 for stronger green removal.
+rmgreen 1 0.7
+
+# --- 9. Denoise ---
+# Light denoise to preserve fine filament structure.
+# mod=0.35: 35% denoised / 65% original (conservative)
+denoise -mod=0.35
+
+# --- 10. Star reduction (optional) ---
 # Nebula images often benefit from smaller stars
 # to let the nebula structure dominate.
 # Requires StarNet++ installed and configured in Siril.
@@ -124,7 +134,7 @@ denoise -mod=0.5
 # Save stretched result
 save ../output/stretched_master
 
-# --- 10. Export ---
+# --- 11. Export ---
 savetif ../output/final -deflate
 savejpg ../output/final 95
 savepng ../output/final

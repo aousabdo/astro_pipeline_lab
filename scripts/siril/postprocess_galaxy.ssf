@@ -10,14 +10,14 @@
 #   siril-cli -s postprocess_galaxy.ssf -d <session>/work
 #
 # EXPECTS:
-#   result.fit in the working directory (output of preprocess script)
+#   result.fits in the working directory (output of preprocess script)
 #
 # OUTPUTS in <session>/output/:
-#   <object>_linear.fit       -- processed linear master (before stretch)
-#   <object>_stretched.fit    -- stretched result
-#   <object>_final.tif        -- 16-bit TIFF export
-#   <object>_final.jpg        -- JPEG for sharing
-#   <object>_final.png        -- PNG for sharing
+#   linear_master.fits    -- processed linear master (before stretch)
+#   stretched_master.fits -- stretched result
+#   final.tif             -- 16-bit TIFF export
+#   final.jpg             -- JPEG for sharing
+#   final.png             -- PNG for sharing
 #
 # PHILOSOPHY:
 #   Galaxies punish overprocessing. Every step is conservative.
@@ -40,13 +40,9 @@ load result
 ###############################################
 
 # --- 1. Background extraction ---
-# (The stacked image was already cropped by -framing=min during registration.
-#  No need for separate crop step.)
 # Remove light pollution gradients BEFORE color calibration.
 # For Bortle 8 urban skies this is critical.
-#
-# Using polynomial degree 4: handles complex urban gradients
-# without overfitting to the target itself.
+# degree=4: handles complex urban gradients
 # samples=30: denser sampling for better gradient model
 # tolerance=1.0: excludes bright objects (galaxy, stars) from model
 subsky 4 -dither -samples=30 -tolerance=1.0
@@ -64,15 +60,9 @@ pcc
 # --- 3. Deconvolution (mild) ---
 # Sharpen while still in linear domain. Doing this after
 # stretching amplifies noise, so we do it here.
-#
-# Using blind PSF estimation (lets Siril figure out the PSF
-# from the actual star shapes in this image).
-# Richardson-Lucy with Total Variation regularization
-# prevents noise amplification.
-#
-# Key settings for galaxies:
-#   iters=10: conservative iteration count (more = sharper but riskier)
-#   alpha=5000: moderate regularization (lower = more regularization)
+# Richardson-Lucy with Total Variation regularization.
+# iters=10: conservative (more = sharper but riskier for galaxies)
+# alpha=5000: moderate regularization
 makepsf blind -l0
 rl -alpha=5000 -iters=10 -tv
 
@@ -81,65 +71,59 @@ save ../output/linear_master
 
 ###############################################
 # PHASE 2: NONLINEAR DOMAIN (aesthetics)
-# Stretching reveals the image. Go slow.
+#
+# Strategy: autostretch for reliable baseline, then
+# gentle GHS to refine faint structure, then linstretch
+# for proper black point.
 ###############################################
 
-# --- 4. GHS Stretch ---
-# Generalized Hyperbolic Stretch: the most controllable
-# stretch in Siril. For galaxies, we do multiple gentle
-# passes rather than one aggressive stretch.
-#
-# Parameters explained:
-#   -D=  : stretch intensity (0-10). Lower = gentler.
-#   -B=  : local stretch intensity near symmetry point (-5 to 15)
-#   -SP= : symmetry point (0-1). Where the stretch is strongest.
-#          For galaxies, keep low to reveal faint structure first.
-#   -LP= : shadow preserve. Linear below this point.
-#   -HP= : highlight preserve. Linear above this point.
-#          Protects galaxy core from blowout.
-#   -human: use human-eye weighted luminance (preserves color balance)
+# --- 4. Autostretch ---
+# -linked: same stretch on all channels (preserves PCC white balance)
+# shadowsclip=-2.5: moderate shadow clipping (between -2.8 default and -2.0)
+#   Galaxies need slightly lighter shadows than nebulae to preserve faint halos
+# targetbg=0.20: reasonably dark background
+autostretch -linked -2.5 0.20
 
-# Pass 1: gentle initial stretch, reveal faint outer structure
-ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=1.0 -human
+# --- 5. GHS refinement ---
+# Very gentle GHS to lift faint outer halo detail without
+# affecting the core or background.
+# D=0.4: very gentle
+# B=1: slight boost near SP
+# SP=0.30: targets faint-to-mid brightness (outer spiral arms)
+# LP=0.06: lock the dark background
+# HP=0.80: protect the galaxy core
+ght -D=0.4 -B=1 -SP=0.30 -LP=0.06 -HP=0.80 -human
 
-# Pass 2: boost midtones slightly, keep highlights safe
-ght -D=1.5 -B=2 -SP=0.15 -LP=0 -HP=0.85 -human
-
-# Pass 3: fine adjustment, lift faint halo detail
-ght -D=1.0 -B=1 -SP=0.25 -LP=0.05 -HP=0.80 -human
-
-# --- 5. Set black point ---
-# Ensure background is properly dark after stretch.
-linstretch -BP=0.04
+# --- 6. Set black point ---
+# Clip the bottom 5% to true black. More conservative than
+# nebula script (4% vs 8%) to preserve faint outer halo.
+linstretch -BP=0.05
 
 ###############################################
 # PHASE 3: FINISHING (light touch only)
 ###############################################
 
-# --- 6. Saturation ---
-# Very light saturation boost. Galaxies look best
-# with restrained, natural color.
-# amount=0.25 is a 25% increase. background_factor=1
+# --- 7. Saturation ---
+# Restrained saturation. Galaxies look best with natural color.
+# amount=0.40 is a 40% increase. background_factor=1
 # prevents boosting noise in the background.
-satu 0.25 1
+satu 0.40 1
 
-# --- 7. Green noise removal ---
-# Usually not needed after proper SPCC, but Origin data
-# sometimes shows slight green cast. Use only if needed.
-# Uncomment the line below if green tint is visible:
+# --- 8. Green noise removal ---
+# Uncomment if green tint is visible:
 # rmgreen 1 0.5
 
-# --- 8. Denoise (optional, light) ---
-# Only if needed. For galaxies, aggressive denoise
-# destroys dust lanes and faint spiral arms.
-# mod=0.5: blend 50% denoised with 50% original (very conservative)
+# --- 9. Denoise (optional, light) ---
+# Only enable if needed. Aggressive denoise destroys
+# galaxy dust lanes and faint spiral arms.
+# mod=0.3: 30% denoised / 70% original (very conservative)
 # Uncomment if the image is noisy:
-# denoise -mod=0.5
+# denoise -mod=0.3
 
 # Save stretched result
 save ../output/stretched_master
 
-# --- 9. Export ---
+# --- 10. Export ---
 savetif ../output/final -deflate
 savejpg ../output/final 95
 savepng ../output/final
