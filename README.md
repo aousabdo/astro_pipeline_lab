@@ -47,6 +47,7 @@ siril-cli -s scripts/siril/postprocess_galaxy.ssf -d /path/to/session/work
 | `postprocess_galaxy.ssf` | Conservative galaxy processing (faint halos, natural look) |
 | `postprocess_nebula.ssf` | Balanced nebula processing with PCC (broadband/no-filter data) |
 | `postprocess_nebula_filter.ssf` | Nebula processing without PCC (for nebula/dual-band/UHC filters -- preserves Ha reds) |
+| `postprocess_nebula_pro.ssf` | **Best quality.** StarNet star separation + per-channel GHS + screen-blend recomposition. Requires StarNet++ |
 | `postprocess_cluster.ssf` | Clean star cluster processing (minimal, sharp stars) |
 | `quick_tiff.ssf` | Fast processing from Origin's stacked TIFF (~90% quality, ~30% effort) |
 

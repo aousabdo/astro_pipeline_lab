@@ -1,0 +1,159 @@
+############################################
+# Post-Process: Nebula PRO (StarNet + Per-Channel GHS)
+#
+# Advanced nebula processing with star separation,
+# independent nebula/star processing, and screen-blend
+# recomposition. For nebula filter (dual-band, UHC, etc.) data.
+#
+# This is the best pipeline we have for emission nebulae.
+#
+# KEY TECHNIQUES:
+#   1. No PCC -- preserves native Ha/OIII filter response
+#   2. StarNet -- removes stars before stretching (no bloat)
+#   3. Per-channel GHS -- shifts orange→pink (reduce G),
+#      reveals blue OIII (boost B)
+#   4. Screen-blend stars back at controlled brightness
+#
+# Siril >= 1.4.0 required + StarNet++ configured in Siril prefs
+#
+# USAGE:
+#   siril-cli -s postprocess_nebula_pro.ssf -d <session>/work
+#
+# EXPECTS:
+#   result.fits in the working directory (from preprocess script)
+#
+# OUTPUTS in <session>/output/:
+#   linear_master.fits        -- pre-stretch linear (starless)
+#   starless_stretched.fits   -- stretched nebula without stars
+#   final.tif/jpg/png         -- finished image with stars
+#
+# TESTED on: M42 Orion Nebula
+#   - Single session: 134 frames, 45s, Origin, nebula filter, Bortle 8
+#   - Multi-session: 3 nights, 137 min total integration
+#   - Iterated through 20+ parameter combinations
+#
+# WORKS FOR: Any emission nebula with a nebula/dual-band filter
+#   (M42, M8, M17, M16, NGC7000, IC1396, Rosette, etc.)
+#   Parameters are a strong starting point. Adjust per target:
+#     - Bright nebulae (M42, M8): lower HP to protect core
+#     - Faint nebulae (IC1396, Sh2-): raise D values, lower LP
+#     - Narrowband (Ha/OIII/SII): may need different channel ratios
+############################################
+
+requires 1.4.0
+
+set32bits
+setext fits
+
+load result
+
+###############################################
+# PHASE 1: LINEAR DOMAIN
+###############################################
+
+# --- 1. Background extraction ---
+subsky 4 -dither -samples=35 -tolerance=0.8
+
+# --- 2. Deconvolution ---
+makepsf blind -l0
+rl -alpha=4000 -iters=12 -tv
+
+# --- 3. Star removal ---
+# StarNet on linear data with -stretch flag:
+# internally stretches, runs neural net, then inverts.
+# Creates: starless_result.fits (loaded) + starmask_result.fits
+starnet -stretch
+
+# Save starless linear checkpoint, then reload to reset internal stats
+save ../output/linear_master
+close
+load ../output/linear_master
+
+###############################################
+# PHASE 2: STRETCH (starless nebula)
+#
+# Without stars we can push hard without bloating.
+# Per-channel GHS controls the color palette:
+#   - Red: moderate (Ha emission)
+#   - Green: reduced (shifts Ha from orange to pink)
+#   - Blue: boosted (reveals OIII and blue reflection nebulosity)
+###############################################
+
+# --- 4. Autostretch baseline ---
+# -linked preserves channel ratios as starting point
+autostretch -linked -2.0 0.20
+
+# --- 5. Per-channel GHS ---
+# RED: moderate boost for Ha emission
+ght -D=0.5 -B=2 -SP=0.25 -LP=0.06 -HP=0.65 R
+
+# GREEN: reduced stretch (shifts Ha from orange to pink)
+ght -D=0.3 -B=1.5 -SP=0.25 -LP=0.08 -HP=0.70 G
+
+# BLUE: boosted for OIII and reflection nebulosity
+ght -D=0.6 -B=2.5 -SP=0.20 -LP=0.05 -HP=0.65 B
+
+# --- 6. Lift outer structure (all channels together) ---
+ght -D=0.4 -B=1.5 -SP=0.50 -LP=0.12 -HP=0.90 -human
+
+# --- 7. Set black point ---
+linstretch -BP=0.08
+
+###############################################
+# PHASE 3: FINISHING (starless)
+###############################################
+
+# --- 8. Saturation ---
+# Global: 120%
+satu 1.2 1
+# Targeted Ha pink-orange (hue index 0): 50%
+satu 0.50 1 0
+# Targeted magenta-pink (hue index 5): 40%
+satu 0.40 1 5
+# Targeted cyan-blue OIII (hue index 4): 50%
+satu 0.50 1 4
+
+# --- 9. Green noise removal ---
+rmgreen 1 0.6
+
+# --- 10. Denoise ---
+# Light: preserve filament structure
+denoise -mod=0.22
+
+# Save stretched starless result (both in work dir for pm and output for archive)
+save nebula_done
+save ../output/starless_stretched
+
+###############################################
+# PHASE 4: STAR RECOMPOSITION
+###############################################
+
+# --- 11. Process star mask ---
+close
+load starmask_result
+
+# Gentle stretch for natural-looking stars
+autostretch -linked -2.2 0.22
+
+# Scale stars to 60% brightness to prevent bloat and overwhelming the nebula.
+# The screen blend adds them on top, so full-brightness stars blow out.
+# Adjust this value if stars are too faint (raise) or too bright (lower).
+pm "$starmask_result$*0.60"
+
+# Save processed stars
+save stars_done
+
+# --- 12. Screen blend: nebula + stars ---
+# Screen blend formula: out = A + B - A*B
+# Prevents blowout compared to simple addition
+close
+load nebula_done
+pm "$nebula_done$+$stars_done$-$nebula_done$*$stars_done$" -rescale
+
+# --- 13. Export ---
+save ../output/final
+savetif ../output/final -deflate
+savejpg ../output/final 95
+savepng ../output/final
+
+close

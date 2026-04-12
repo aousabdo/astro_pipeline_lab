@@ -42,6 +42,7 @@ POSTPROCESS_SCRIPTS = {
     "galaxy": SCRIPTS_DIR / "postprocess_galaxy.ssf",
     "nebula": SCRIPTS_DIR / "postprocess_nebula.ssf",
     "nebula_filter": SCRIPTS_DIR / "postprocess_nebula_filter.ssf",
+    "nebula_pro": SCRIPTS_DIR / "postprocess_nebula_pro.ssf",
     "cluster": SCRIPTS_DIR / "postprocess_cluster.ssf",
 }
 
@@ -173,7 +174,8 @@ def update_manifest_status(session_path: Path, field: str, value):
 # Main
 # ---------------------------------------------------------------------------
 
-def process_session(session_path: Path, skip_preprocess: bool = False, skip_postprocess: bool = False):
+def process_session(session_path: Path, skip_preprocess: bool = False,
+                     skip_postprocess: bool = False, profile_override: str = None):
     """Run the full pipeline on a session."""
     session_path = session_path.resolve()
     log.info(f"Processing session: {session_path.name}")
@@ -220,13 +222,27 @@ def process_session(session_path: Path, skip_preprocess: bool = False, skip_post
 
     # --- POSTPROCESS ---
     if not skip_postprocess:
-        post_key = CATEGORY_MAP.get(category, "galaxy")
+        if profile_override:
+            post_key = profile_override
+            log.info(f"Using forced profile: {post_key}")
+        else:
+            post_key = CATEGORY_MAP.get(category, "galaxy")
 
-        # For nebulae with a nebula/dual-band filter, use the no-PCC script
+        # For nebulae with a nebula/dual-band filter, use the pro script
+        # (StarNet + per-channel GHS). Falls back to nebula_filter if StarNet unavailable.
         acq_filter = manifest.get("acquisition", {}).get("filter", "none")
         if post_key == "nebula" and acq_filter.lower() in NEBULA_FILTERS:
-            post_key = "nebula_filter"
-            log.info(f"Detected nebula filter '{acq_filter}' -- skipping PCC")
+            # Check if StarNet is available (configured in Siril prefs)
+            starnet_check = subprocess.run(
+                ["grep", "-q", "starnet_exe=", str(Path.home() / "Library/Application Support/org.siril.Siril/siril/config.1.4.ini")],
+                capture_output=True
+            )
+            if starnet_check.returncode == 0:
+                post_key = "nebula_pro"
+                log.info(f"Detected nebula filter '{acq_filter}' + StarNet available -- using pro pipeline")
+            else:
+                post_key = "nebula_filter"
+                log.info(f"Detected nebula filter '{acq_filter}' -- skipping PCC (no StarNet)")
 
         postprocess_script = POSTPROCESS_SCRIPTS[post_key]
         log.info(f"Post-processing with: {postprocess_script.name}")
@@ -255,16 +271,18 @@ def main():
     parser = argparse.ArgumentParser(description="Process an astrophotography session")
     parser.add_argument("session", type=Path, help="Path to session directory")
     parser.add_argument("--skip-preprocess", action="store_true",
-                        help="Skip preprocessing (use existing result.fit)")
+                        help="Skip preprocessing (use existing result.fits)")
     parser.add_argument("--skip-postprocess", action="store_true",
                         help="Skip post-processing (only preprocess)")
+    parser.add_argument("--profile", choices=list(POSTPROCESS_SCRIPTS.keys()),
+                        help="Force a specific post-processing profile (overrides auto-detection)")
     args = parser.parse_args()
 
     if not args.session.exists():
         log.error(f"Session path does not exist: {args.session}")
         sys.exit(1)
 
-    process_session(args.session, args.skip_preprocess, args.skip_postprocess)
+    process_session(args.session, args.skip_preprocess, args.skip_postprocess, args.profile)
 
 
 if __name__ == "__main__":
