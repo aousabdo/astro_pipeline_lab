@@ -45,7 +45,8 @@ siril-cli -s scripts/siril/postprocess_galaxy.ssf -d /path/to/session/work
 | `preprocess_with_darks.ssf` | Stack with dark subtraction |
 | `preprocess_full_cal.ssf` | Full calibration: darks + flats + bias |
 | `postprocess_galaxy.ssf` | Conservative galaxy processing (faint halos, natural look) |
-| `postprocess_nebula.ssf` | Balanced nebula processing (stronger contrast, richer color) |
+| `postprocess_nebula.ssf` | Balanced nebula processing with PCC (broadband/no-filter data) |
+| `postprocess_nebula_filter.ssf` | Nebula processing without PCC (for nebula/dual-band/UHC filters -- preserves Ha reds) |
 | `postprocess_cluster.ssf` | Clean star cluster processing (minimal, sharp stars) |
 | `quick_tiff.ssf` | Fast processing from Origin's stacked TIFF (~90% quality, ~30% effort) |
 

@@ -1,0 +1,108 @@
+############################################
+# Post-Process: Nebula with Nebula/Dual-Band Filter
+#
+# Specialized script for data taken with a nebula filter
+# (dual-band, UHC, L-eNhance, L-eXtreme, etc).
+#
+# KEY DIFFERENCE from postprocess_nebula.ssf:
+#   NO photometric color calibration (PCC/SPCC).
+#   Nebula filters pass Ha/OIII selectively. PCC sees these
+#   enhanced wavelengths and "corrects" them away, killing
+#   the vivid reds and blues the filter was designed to capture.
+#   Instead we let the native filter colors shine through.
+#
+# Siril >= 1.4.0 required
+#
+# USAGE:
+#   siril-cli -s postprocess_nebula_filter.ssf -d <session>/work
+#
+# TESTED on: 134-frame M42 Orion (Origin, 45s, nebula filter, Bortle 8)
+# Iterated through 15+ parameter combinations to find optimal settings.
+############################################
+
+requires 1.4.0
+
+set32bits
+setext fits
+
+load result
+
+###############################################
+# PHASE 1: LINEAR DOMAIN
+# No color calibration -- preserve filter's native Ha/OIII response
+###############################################
+
+# --- 1. Background extraction ---
+# Aggressive gradient removal for Bortle 8 urban skies.
+# tolerance=0.8 excludes bright nebula from the gradient model.
+subsky 4 -dither -samples=35 -tolerance=0.8
+
+# --- 2. Deconvolution ---
+# Blind PSF estimation + Richardson-Lucy with TV regularization.
+# Sharpens nebula filaments while still in linear domain.
+makepsf blind -l0
+rl -alpha=4000 -iters=12 -tv
+
+# Save linear checkpoint (no color calibration applied)
+save ../output/linear_master
+
+###############################################
+# PHASE 2: NONLINEAR DOMAIN
+#
+# Strategy: tight autostretch for the heavy lifting,
+# then dual-pass GHS to separately refine the bright
+# nebula body and the faint outer wings.
+###############################################
+
+# --- 3. Autostretch ---
+# -linked: same stretch on all channels
+# shadowsclip=-1.5: tighter than default (clips more shadow to black)
+# targetbg=0.14: dark target background
+autostretch -linked -1.5 0.14
+
+# --- 4. GHS Pass 1: Punch the nebula body ---
+# Boost contrast in the main nebula structure.
+# HP=0.65: protect the bright core hard (M42 core blows out easily)
+ght -D=0.8 -B=3 -SP=0.25 -LP=0.08 -HP=0.65 -human
+
+# --- 5. GHS Pass 2: Lift outer wings ---
+# Gently reveal faint outer nebulosity.
+# LP=0.15: lock the now-dark background, don't lift it
+ght -D=0.4 -B=1 -SP=0.50 -LP=0.15 -HP=0.90 -human
+
+# --- 6. Set black point ---
+# Clip the bottom 10% to true black.
+linstretch -BP=0.10
+
+###############################################
+# PHASE 3: FINISHING
+###############################################
+
+# --- 7. Saturation ---
+# Global boost: 130%. Without PCC flattening the Ha,
+# we need less aggressive saturation than the PCC workflow.
+satu 1.3 1
+
+# Targeted Ha (pink-orange, hue index 0): 60% boost
+satu 0.60 1 0
+
+# Targeted magenta-pink (hue index 5): 40% boost
+satu 0.40 1 5
+
+# --- 8. Green noise removal ---
+rmgreen 1 0.7
+
+# --- 9. Denoise ---
+# Light denoise to preserve filament structure.
+# mod=0.28: mostly original image (72%)
+denoise -mod=0.28
+
+# Save stretched result
+save ../output/stretched_master
+
+# --- 10. Export ---
+savetif ../output/final -deflate
+savejpg ../output/final 95
+savepng ../output/final
+
+close

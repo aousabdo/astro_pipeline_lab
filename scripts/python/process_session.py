@@ -41,8 +41,12 @@ PREPROCESS_SCRIPTS = {
 POSTPROCESS_SCRIPTS = {
     "galaxy": SCRIPTS_DIR / "postprocess_galaxy.ssf",
     "nebula": SCRIPTS_DIR / "postprocess_nebula.ssf",
+    "nebula_filter": SCRIPTS_DIR / "postprocess_nebula_filter.ssf",
     "cluster": SCRIPTS_DIR / "postprocess_cluster.ssf",
 }
+
+# Nebula/dual-band filter names that should skip PCC
+NEBULA_FILTERS = {"nebula", "uhc", "l-enhance", "l-extreme", "cls", "dual-band", "ha", "oiii", "sii"}
 
 # Map manifest categories to postprocess script keys
 CATEGORY_MAP = {
@@ -206,15 +210,24 @@ def process_session(session_path: Path, skip_preprocess: bool = False, skip_post
     else:
         log.info("Skipping preprocessing (--skip-preprocess)")
 
-    # Check that result.fit exists
-    result_fit = work_dir / "result.fit"
+    # Check that result.fits exists (try both .fit and .fits)
+    result_fit = work_dir / "result.fits"
     if not result_fit.exists():
-        log.error(f"Expected {result_fit} but not found. Preprocessing may have failed.")
+        result_fit = work_dir / "result.fit"
+    if not result_fit.exists():
+        log.error(f"No result.fit or result.fits found in {work_dir}. Preprocessing may have failed.")
         sys.exit(1)
 
     # --- POSTPROCESS ---
     if not skip_postprocess:
         post_key = CATEGORY_MAP.get(category, "galaxy")
+
+        # For nebulae with a nebula/dual-band filter, use the no-PCC script
+        acq_filter = manifest.get("acquisition", {}).get("filter", "none")
+        if post_key == "nebula" and acq_filter.lower() in NEBULA_FILTERS:
+            post_key = "nebula_filter"
+            log.info(f"Detected nebula filter '{acq_filter}' -- skipping PCC")
+
         postprocess_script = POSTPROCESS_SCRIPTS[post_key]
         log.info(f"Post-processing with: {postprocess_script.name}")
 
