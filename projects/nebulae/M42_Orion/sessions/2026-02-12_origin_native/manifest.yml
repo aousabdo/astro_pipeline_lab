@@ -1,0 +1,47 @@
+session: 2026-02-12_origin_native
+object: M42_Orion
+category: nebula
+date: 2026-02-12
+
+acquisition:
+  instrument: origin
+  config: native
+  filter: nebula
+  exposure_s: 45
+  frames: 137
+  total_integration_s: 6165
+  iso: 200
+  bayer: RGGB
+
+calibration:
+  darks: false
+  flats: false
+  bias: false
+  notes: Origin internal calibration only
+
+conditions:
+  bortle: 8
+  location: Falls Church VA
+  latitude: 38.843
+  longitude: -77.114
+  moon: null
+  seeing: unknown
+  transparency: unknown
+  notes: null
+
+quality:
+  tracking: good
+  focus: good
+  gradients: unknown
+  origin_stacked: 121
+  origin_rejected: 16
+
+status:
+  stacked: false
+  qc_reviewed: false
+  in_master: false
+
+notes:
+  - First Orion session, test run for pipeline
+  - Origin auto-stacked 121 of 137 frames
+  - Nebula filter used (dual-band or LP filter)

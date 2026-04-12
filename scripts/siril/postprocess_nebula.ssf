@@ -10,14 +10,14 @@
 #   siril-cli -s postprocess_nebula.ssf -d <session>/work
 #
 # EXPECTS:
-#   result.fit in the working directory (output of preprocess script)
+#   result.fits in the working directory (output of preprocess script)
 #
 # OUTPUTS in <session>/output/:
-#   <object>_linear.fit       -- processed linear master
-#   <object>_stretched.fit    -- stretched result
-#   <object>_final.tif        -- 16-bit TIFF export
-#   <object>_final.jpg        -- JPEG for sharing
-#   <object>_final.png        -- PNG for sharing
+#   linear_master.fits    -- processed linear master (before stretch)
+#   stretched_master.fits -- stretched result
+#   final.tif             -- 16-bit TIFF export
+#   final.jpg             -- JPEG for sharing
+#   final.png             -- PNG for sharing
 #
 # PHILOSOPHY:
 #   Nebulae tolerate more aggressive processing than galaxies.
@@ -28,6 +28,7 @@
 requires 1.4.0
 
 set32bits
+setext fits
 
 load result
 
@@ -35,21 +36,26 @@ load result
 # PHASE 1: LINEAR DOMAIN
 ###############################################
 
-# --- 1. Crop ---
-autocrop
-
-# --- 2. Background extraction ---
-# More aggressive than galaxy script.
-# Nebulae can have very faint extensions that blend with
-# sky background, but we need the gradient out.
-# degree=4 with tighter tolerance and more samples.
+# --- 1. Background extraction ---
+# Remove light pollution gradients before color calibration.
+# degree=4 with tighter tolerance for Bortle 8 skies.
+# samples=35 for denser gradient model.
+# tolerance=0.8 to exclude bright nebula from background model.
 subsky 4 -dither -samples=35 -tolerance=0.8
 
-# --- 3. Plate solve + Color calibration ---
-platesolve
-spcc
+# --- 2. Plate solve + Color calibration ---
+# Origin FITS have RA/DEC in headers. Provide focal/pixel as fallback.
+# -force: re-solve even if WCS already exists (clean start)
+platesolve -force -focal=335 -pixelsize=2.4
 
-# --- 4. Deconvolution ---
+# PCC for broadband color calibration.
+# (SPCC is better but may fail with nebula-specific filters.
+#  If you know your exact sensor, try:
+#  spcc "-oscsensor=IMX585" "-oscfilter=UV/IR Cut"
+#  For narrowband/nebula filter data, PCC is the safer default.)
+pcc
+
+# --- 3. Deconvolution ---
 # Slightly more aggressive than galaxy script.
 # Nebula filaments benefit from sharpening.
 # iters=15: more iterations OK for nebulae
@@ -63,46 +69,57 @@ save ../output/linear_master
 ###############################################
 # PHASE 2: NONLINEAR DOMAIN
 # Nebulae can take a harder stretch.
+# Strategy: multiple gentle passes that build up contrast
+# without blowing out the bright nebula core.
 ###############################################
 
-# --- 5. GHS Stretch ---
-# Stronger than galaxy. Push midtones to reveal structure.
+# --- 4. GHS Stretch ---
+# Pass 1: initial stretch, reveal faint nebulosity.
+# D=2.0 (moderate), SP=0.0 (stretch from shadows up)
+# HP=0.65: protect the bright core early
+ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=0.65 -human
 
-# Pass 1: strong initial stretch, bring up faint nebulosity
-ght -D=2.5 -B=1 -SP=0.0 -LP=0 -HP=1.0 -human
+# Pass 2: boost midtones where the nebula structure lives.
+# SP=0.20: focus stretch on the mid-brightness range
+# HP=0.80: let some highlights come up now
+ght -D=1.8 -B=2 -SP=0.20 -LP=0.02 -HP=0.80 -human
 
-# Pass 2: boost midtones aggressively
-ght -D=2.0 -B=3 -SP=0.15 -LP=0 -HP=0.90 -human
+# Pass 3: fine-tune contrast, bring out faint outer filaments.
+# D=1.2 (gentle), higher SP to work on brighter parts now
+ght -D=1.2 -B=1 -SP=0.35 -LP=0.05 -HP=0.85 -human
 
-# Pass 3: fine-tune contrast in the mid-range
-ght -D=1.5 -B=2 -SP=0.30 -LP=0.05 -HP=0.85 -human
+# --- 5. Set black point ---
+# After GHS, the background may not be dark enough.
+# linstretch clips the darkest values to true black.
+# BP=0.05 means the bottom 5% of the histogram becomes black.
+linstretch -BP=0.05
 
 ###############################################
 # PHASE 3: FINISHING
-# More aggressive finishing OK for nebulae.
 ###############################################
 
 # --- 6. Saturation ---
 # Nebulae look great with rich color.
-# amount=0.50 is a 50% boost. Stronger than galaxies.
-satu 0.50 1
+# amount=0.60 is a 60% boost. background_factor=1 prevents
+# boosting noise in the sky background.
+satu 0.60 1
 
-# --- 7. Star reduction (optional) ---
+# --- 7. Green noise removal ---
+# Commonly needed for broadband/nebula filter data.
+rmgreen 1 0.5
+
+# --- 8. Denoise ---
+# Moderate denoise OK for nebulae (less fine structure at risk
+# than galaxy dust lanes).
+# mod=0.5: 50% denoised / 50% original
+denoise -mod=0.5
+
+# --- 9. Star reduction (optional) ---
 # Nebula images often benefit from smaller stars
 # to let the nebula structure dominate.
 # Requires StarNet++ installed and configured in Siril.
 # Uncomment if you have StarNet installed:
 # starnet -stretch
-
-# --- 8. Green noise removal ---
-# More commonly needed for broadband nebula images.
-rmgreen 1 0.5
-
-# --- 9. Denoise ---
-# Moderate denoise OK for nebulae (less fine structure at risk
-# than galaxy dust lanes).
-# mod=0.6: 60% denoised / 40% original
-denoise -mod=0.6
 
 # Save stretched result
 save ../output/stretched_master

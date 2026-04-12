@@ -21,6 +21,7 @@
 requires 1.4.0
 
 set32bits
+setext fits
 
 load result
 
@@ -28,14 +29,12 @@ load result
 # PHASE 1: LINEAR DOMAIN
 ###############################################
 
-autocrop
-
 # Light background extraction. Clusters have less
 # faint extended structure to worry about.
 subsky 3 -dither -samples=25 -tolerance=1.0
 
-platesolve
-spcc
+platesolve -force -focal=335 -pixelsize=2.4
+pcc
 
 # No deconvolution for clusters by default.
 # Sharpening stars risks creating artifacts and rings.
@@ -55,6 +54,9 @@ ght -D=2.0 -B=0 -SP=0.0 -LP=0 -HP=1.0 -human
 
 # Pass 2: lift midtones, protect bright star cores
 ght -D=1.5 -B=1 -SP=0.15 -LP=0 -HP=0.75 -human
+
+# Set black point
+linstretch -BP=0.04
 
 ###############################################
 # PHASE 3: FINISHING (minimal)

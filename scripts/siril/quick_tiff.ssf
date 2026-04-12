@@ -18,17 +18,16 @@
 requires 1.4.0
 
 set32bits
+setext fits
 
 load origin_stack
-
-autocrop
 
 # Background extraction
 subsky 4 -dither -samples=30 -tolerance=1.0
 
 # Plate solve + color calibration
 # PCC is more forgiving than SPCC on pre-processed data
-platesolve
+platesolve -force -focal=335 -pixelsize=2.4
 pcc
 
 # Single-pass stretch (faster than multi-pass GHS)

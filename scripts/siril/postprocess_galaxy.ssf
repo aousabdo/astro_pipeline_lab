@@ -28,6 +28,7 @@
 requires 1.4.0
 
 set32bits
+setext fits
 
 # Load the stacked master
 load result
@@ -38,13 +39,9 @@ load result
 # This is where image quality is won or lost.
 ###############################################
 
-# --- 1. Crop bad edges ---
-# The stacked image often has soft/misaligned edges from
-# registration. Remove them before background modeling.
-# Autocrop removes zero-value borders from stacking.
-autocrop
-
-# --- 2. Background extraction ---
+# --- 1. Background extraction ---
+# (The stacked image was already cropped by -framing=min during registration.
+#  No need for separate crop step.)
 # Remove light pollution gradients BEFORE color calibration.
 # For Bortle 8 urban skies this is critical.
 #
@@ -54,22 +51,17 @@ autocrop
 # tolerance=1.0: excludes bright objects (galaxy, stars) from model
 subsky 4 -dither -samples=30 -tolerance=1.0
 
-# --- 3. Photometric color calibration ---
+# --- 2. Photometric color calibration ---
 # Plate-solve first (required for PCC/SPCC).
-# Origin FITS headers contain RA/DEC, focal length, pixel size,
-# so platesolve should work without manual coordinates.
-# If it fails, add: platesolve RA,DEC -focal=330 -pixelsize=2.0
-platesolve
+# Origin FITS headers contain RA/DEC. Provide focal/pixel as fallback.
+platesolve -force -focal=335 -pixelsize=2.4
 
-# SPCC is preferred over PCC: uses Gaia DR3 spectral data
-# for more accurate color calibration per your actual sensor.
-#
-# If you know your exact sensor model, uncomment and set:
-#   spcc "-oscsensor=IMX585"
-# Otherwise SPCC will use a generic OSC response.
-spcc
+# PCC for reliable broadband color calibration.
+# (For better accuracy with known sensor, try SPCC instead:
+#   spcc "-oscsensor=IMX585" "-oscfilter=UV/IR Cut" )
+pcc
 
-# --- 4. Deconvolution (mild) ---
+# --- 3. Deconvolution (mild) ---
 # Sharpen while still in linear domain. Doing this after
 # stretching amplifies noise, so we do it here.
 #
@@ -92,7 +84,7 @@ save ../output/linear_master
 # Stretching reveals the image. Go slow.
 ###############################################
 
-# --- 5. GHS Stretch ---
+# --- 4. GHS Stretch ---
 # Generalized Hyperbolic Stretch: the most controllable
 # stretch in Siril. For galaxies, we do multiple gentle
 # passes rather than one aggressive stretch.
@@ -115,6 +107,10 @@ ght -D=1.5 -B=2 -SP=0.15 -LP=0 -HP=0.85 -human
 
 # Pass 3: fine adjustment, lift faint halo detail
 ght -D=1.0 -B=1 -SP=0.25 -LP=0.05 -HP=0.80 -human
+
+# --- 5. Set black point ---
+# Ensure background is properly dark after stretch.
+linstretch -BP=0.04
 
 ###############################################
 # PHASE 3: FINISHING (light touch only)

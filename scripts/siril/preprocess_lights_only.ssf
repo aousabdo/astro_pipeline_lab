@@ -21,26 +21,33 @@ requires 1.3.4
 # Use 32-bit for maximum dynamic range
 set32bits
 
-# Convert light frames (auto-detects Bayer pattern from FITS headers)
+# Match the Origin's .fits extension
+setext fits
+
+# Convert light frames to Siril sequence
+# (auto-detects Bayer pattern from FITS headers: RGGB for Origin)
+# -debayer: demosaic CFA to RGB during conversion
 cd lights
-convert light -out=../process
+convert light -debayer -out=../process
 cd ../process
 
 # Register (2-pass for best alignment, homography for field distortion)
+# Pass 1: finds the best reference frame
+# Pass 2: computes transforms relative to the best reference
 register light -2pass
 seqapplyreg light -framing=min -interp=lanczos4
 
 # Stack with winsorized sigma rejection
 # -norm=addscale: additive + scale normalization (handles sky brightness changes)
 # -weight=noise: weight frames by inverse noise (best frames contribute more)
-# -rgb_equal: equalize channel backgrounds
+# -rgb_equal: equalize channel backgrounds before stacking
 # 3 3: sigma low/high rejection thresholds
 stack r_light rej w 3 3 -norm=addscale -weight=noise -rgb_equal -output_norm -32b -out=result
 
 load result
 mirrorx -bottomup
-save ../result_$LIVETIME:%d$s
 save ../result
+save ../result_$LIVETIME:%d$s
 
 cd ..
 close

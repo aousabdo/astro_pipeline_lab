@@ -19,6 +19,7 @@
 requires 1.3.4
 
 set32bits
+setext fits
 
 # --- BIAS ---
 cd biases
