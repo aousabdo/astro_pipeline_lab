@@ -6,50 +6,67 @@ Automated astrophotography processing pipeline built around [Siril](https://siri
 
 A set of Siril scripts, a Python orchestrator, and a project structure for repeatable, high-quality deep-sky image processing. The pipeline handles everything from raw FITS calibration through stretching and export.
 
-**Processing philosophy:** three phases, always in order:
-1. **Linear domain** (physics) -- calibrate, stack, extract background, color calibrate, deconvolve
-2. **Nonlinear domain** (aesthetics) -- stretch with GHS
-3. **Finishing** (enhancement) -- denoise, sharpen, saturation
+**Processing philosophy:** automation handles the tedious part (stacking, calibration, background extraction, multi-night integration). You handle the artistic part (stretching, color, saturation) in Siril's GUI.
+
+The pipeline outputs a clean **linear master** FITS -- background-extracted, deconvolved, ready for you to stretch to taste.
 
 ## Quick start
 
 ```bash
-# 1. Create a new session
-./scripts/shell/new-session.sh galaxies M51_Whirlpool 2026-04-12_origin_native
+# 1. Create sessions and link your FITS
+./scripts/shell/new-session.sh nebulae M42_Orion 2026-02-12_origin_native
+ln -s /path/to/your/fits/* projects/nebulae/M42_Orion/sessions/2026-02-12_origin_native/work/lights/
 
-# 2. Put your raw FITS in the session
-ln -s /path/to/your/fits/* projects/galaxies/M51_Whirlpool/sessions/2026-04-12_origin_native/work/lights/
+# 2. Preprocess all sessions for a target
+python scripts/python/preprocess_all.py projects/nebulae/M42_Orion
 
-# 3. Edit the manifest
-vim projects/galaxies/M51_Whirlpool/sessions/2026-04-12_origin_native/manifest.yml
+# 3. Combine multiple sessions into one deep master
+python scripts/python/preprocess_all.py projects/nebulae/M42_Orion --combine
 
-# 4. Run the pipeline
-python scripts/python/process_session.py projects/galaxies/M51_Whirlpool/sessions/2026-04-12_origin_native
+# 4. Open the linear master in Siril GUI and stretch to taste
+#    Output: projects/nebulae/M42_Orion/master/output/linear.fits
 ```
 
 Or run Siril scripts directly:
 
 ```bash
-# Preprocess (stack raw frames)
-siril-cli -s scripts/siril/preprocess_lights_only.ssf -d /path/to/session/work
+# Preprocess a single session to linear master
+siril-cli -s scripts/siril/preprocess_to_linear.ssf -d <session>/work
 
-# Post-process (background extraction, color cal, stretch, export)
-siril-cli -s scripts/siril/postprocess_galaxy.ssf -d /path/to/session/work
+# Combine multiple session masters
+# (place session1.fits, session2.fits, ... in the work dir)
+siril-cli -s scripts/siril/combine_sessions.ssf -d <object>/master/work
+```
+
+For fully automated end-to-end processing (stretch included):
+
+```bash
+python scripts/python/process_session.py <session_path>
+python scripts/python/process_session.py <session_path> --profile nebula_pro
 ```
 
 ## Siril scripts
 
+### Preprocessing (automated -- produces linear masters)
+
 | Script | Purpose |
 |--------|---------|
-| `preprocess_lights_only.ssf` | Stack light frames with no calibration (typical Origin workflow) |
+| **`preprocess_to_linear.ssf`** | **Recommended.** Stack + bg extraction + deconvolution → linear master for manual stretching |
+| `preprocess_lights_only.ssf` | Stack only (no bg extraction or deconvolution) |
 | `preprocess_with_darks.ssf` | Stack with dark subtraction |
 | `preprocess_full_cal.ssf` | Full calibration: darks + flats + bias |
-| `postprocess_galaxy.ssf` | Conservative galaxy processing (faint halos, natural look) |
-| `postprocess_nebula.ssf` | Balanced nebula processing with PCC (broadband/no-filter data) |
-| `postprocess_nebula_filter.ssf` | Nebula processing without PCC (for nebula/dual-band/UHC filters -- preserves Ha reds) |
-| `postprocess_nebula_pro.ssf` | **Best quality.** StarNet star separation + per-channel GHS + screen-blend recomposition. Requires StarNet++ |
-| `postprocess_cluster.ssf` | Clean star cluster processing (minimal, sharp stars) |
-| `quick_tiff.ssf` | Fast processing from Origin's stacked TIFF (~90% quality, ~30% effort) |
+| **`combine_sessions.ssf`** | Combine multiple session masters into one deep-integration linear master |
+
+### Post-processing (automated stretch -- optional)
+
+| Script | Purpose |
+|--------|---------|
+| `postprocess_galaxy.ssf` | Conservative galaxy processing |
+| `postprocess_nebula.ssf` | Nebula with PCC (broadband/no-filter data) |
+| `postprocess_nebula_filter.ssf` | Nebula without PCC (nebula/dual-band filters) |
+| `postprocess_nebula_pro.ssf` | StarNet + per-channel GHS (best for bright nebulae like M42). Requires StarNet++ |
+| `postprocess_cluster.ssf` | Star cluster processing |
+| `quick_tiff.ssf` | Fast processing from Origin's stacked TIFF |
 
 ## Processing profiles
 

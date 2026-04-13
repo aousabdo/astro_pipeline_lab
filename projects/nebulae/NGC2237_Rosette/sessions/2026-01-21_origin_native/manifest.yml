@@ -1,0 +1,41 @@
+# Session manifest template -- copy into each session folder as manifest.yml
+# Fill in the values. Use null for unknowns, not empty strings.
+
+session: YYYY-MM-DD_instrument_config
+object: CATALOGID_CommonName
+category: galaxy                  # galaxy | nebula | cluster | comet | widefield | moon_planet
+date: YYYY-MM-DD
+
+acquisition:
+  instrument: origin              # origin | c11 | askar103
+  config: native                  # native | reducer | hyperstar | flattener | barlow
+  filter: none
+  exposure_s: 10
+  frames: 0
+  total_integration_s: 0
+
+calibration:
+  darks: false
+  flats: false
+  bias: false
+  notes: null
+
+conditions:
+  bortle: 8
+  location: Falls Church VA
+  moon: null
+  seeing: unknown                 # excellent | good | fair | poor | unknown
+  transparency: unknown
+  notes: null
+
+quality:
+  tracking: unknown               # excellent | good | acceptable | poor | unknown
+  focus: unknown
+  gradients: unknown
+
+status:
+  stacked: false
+  qc_reviewed: false
+  in_master: false
+
+notes: []

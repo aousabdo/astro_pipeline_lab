@@ -1,0 +1,9 @@
+# Object profile template -- copy into each object folder as object_profile.yml
+# Defines how this target should be processed by default.
+
+object: CATALOGID_CommonName
+category: galaxy                  # galaxy | nebula | cluster | comet | widefield | moon_planet
+catalog_ids: []                   # e.g. [M51, NGC5194]
+framing: null                     # e.g. "full galaxy with companion"
+processing_profile: galaxy_conservative
+notes: null

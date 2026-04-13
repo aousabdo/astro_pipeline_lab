@@ -1,0 +1,92 @@
+############################################
+# Combine Session Masters
+#
+# Takes multiple per-session stacked masters and combines
+# them into one deep-integration linear master.
+#
+# Siril >= 1.4.0 required
+#
+# SETUP:
+#   Place session masters in the work directory as:
+#     session1.fits, session2.fits, session3.fits, ...
+#   (up to session9.fits supported)
+#
+# USAGE:
+#   siril-cli -s combine_sessions.ssf -d <object>/master/work
+#
+# OUTPUT:
+#   result.fits           -- combined stacked master
+#   ../output/linear.fits -- bg-extracted, deconvolved linear master
+#
+# After this script, open linear.fits in Siril GUI for
+# manual stretching and finishing.
+############################################
+
+requires 1.4.0
+
+set32bits
+setext fits
+
+# ===== PLATE SOLVE EACH SESSION =====
+# Each master needs WCS so they can be aligned to the same sky
+
+load session1
+platesolve -force -focal=335 -pixelsize=2.4
+save session1
+close
+
+load session2
+platesolve -force -focal=335 -pixelsize=2.4
+save session2
+close
+
+# Sessions 3-9 are optional. Siril ignores errors on missing files
+# during link, so extra load/save blocks for unused sessions won't run.
+# To add more sessions, uncomment blocks below:
+
+#load session3
+#platesolve -force -focal=335 -pixelsize=2.4
+#save session3
+#close
+
+#load session4
+#platesolve -force -focal=335 -pixelsize=2.4
+#save session4
+#close
+
+#load session5
+#platesolve -force -focal=335 -pixelsize=2.4
+#save session5
+#close
+
+# ===== REGISTER + STACK =====
+
+link session -out=.
+
+register session -2pass -interp=lanczos4
+seqapplyreg session -framing=min -interp=lanczos4
+
+# Stack with noise-weighted average
+# Handles different exposure times via addscale normalization
+stack r_session rej w 3 3 -norm=addscale -weight=noise -output_norm -32b -out=result
+
+load result
+mirrorx -bottomup
+save result
+
+# ===== POST-STACK LINEAR PROCESSING =====
+
+# Background extraction
+subsky 4 -dither -samples=30 -tolerance=1.0
+
+# Plate solve the combined master
+platesolve -force -focal=335 -pixelsize=2.4
+
+# Deconvolution
+makepsf blind -l0
+rl -alpha=5000 -iters=10 -tv
+
+# Save the linear master
+save ../output/linear
+
+close

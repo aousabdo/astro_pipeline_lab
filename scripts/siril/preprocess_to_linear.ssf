@@ -1,0 +1,79 @@
+############################################
+# Preprocess to Linear Master
+#
+# Takes raw Origin FITS and produces a clean, stacked,
+# background-extracted, color-calibrated LINEAR master
+# ready for manual stretching in Siril GUI.
+#
+# This is the automation boundary -- everything up to
+# here is tedious and repeatable. Everything after
+# (stretching, saturation, star work) benefits from
+# a human eye.
+#
+# Siril >= 1.4.0 required
+#
+# USAGE:
+#   siril-cli -s preprocess_to_linear.ssf -d <session>/work
+#
+# EXPECTS:
+#   lights/ directory with raw FITS in the work dir
+#
+# OUTPUTS:
+#   result.fits          -- stacked master (in work dir)
+#   ../output/linear.fits -- bg-extracted, deconvolved linear master
+#
+# After this script, open linear.fits in Siril GUI and:
+#   1. Stretch (GHS, autostretch, your preference)
+#   2. Saturation
+#   3. StarNet if desired
+#   4. Denoise
+#   5. Export
+############################################
+
+requires 1.4.0
+
+set32bits
+setext fits
+
+# ===== STACK =====
+
+cd lights
+convert light -debayer -out=../process
+cd ../process
+
+register light -2pass
+seqapplyreg light -framing=min -interp=lanczos4
+
+stack r_light rej w 3 3 -norm=addscale -weight=noise -rgb_equal -output_norm -32b -out=result
+
+load result
+mirrorx -bottomup
+save ../result
+
+cd ..
+
+# ===== BACKGROUND EXTRACTION =====
+
+load result
+
+# Remove gradients. Adjust degree for your sky:
+#   degree 2-3: mild gradients (dark sites)
+#   degree 4:   moderate gradients (Bortle 6-8, default)
+#   degree 5-6: severe gradients (Bortle 9, near city)
+subsky 4 -dither -samples=30 -tolerance=1.0
+
+# ===== PLATE SOLVE =====
+# Needed for PCC/SPCC. If it fails, the linear master
+# is still usable -- just skip color cal in the GUI.
+platesolve -force -focal=335 -pixelsize=2.4
+
+# ===== DECONVOLUTION =====
+# Mild sharpening while still linear. Safe to do here
+# because we're not amplifying stretched noise.
+makepsf blind -l0
+rl -alpha=5000 -iters=10 -tv
+
+# ===== SAVE LINEAR MASTER =====
+save ../output/linear
+
+close
