@@ -46,8 +46,8 @@ if [ ! -f "$OBJECT_DIR/notes.md" ]; then
     echo "Processing journal and lessons learned." >> "$OBJECT_DIR/notes.md"
 fi
 
-# Create session folder
-mkdir -p "$SESSION_DIR"/{raw,work,output,logs}
+# Create session folder (work/lights is where raw FITS go for Siril)
+mkdir -p "$SESSION_DIR"/{raw,work/lights,output,logs}
 
 # Copy and partially fill manifest
 cp "$ROOT/scripts/templates/session_manifest.yml" "$SESSION_DIR/manifest.yml"
@@ -72,6 +72,8 @@ EOF
 echo "Created: $SESSION_DIR"
 echo ""
 echo "Next steps:"
-echo "  1. Edit $SESSION_DIR/manifest.yml"
-echo "  2. Symlink raw FITS into $SESSION_DIR/raw/"
-echo "  3. Run the Siril processing script"
+echo "  1. Symlink your FITS into the lights dir:"
+echo "     ln -s /path/to/your/Light*.fits $SESSION_DIR/work/lights/"
+echo "  2. Edit manifest: $SESSION_DIR/manifest.yml"
+echo "  3. Preprocess:"
+echo "     python scripts/python/preprocess_all.py $(dirname $(dirname $SESSION_DIR)) --session $SESSION"
