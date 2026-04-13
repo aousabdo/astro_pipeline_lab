@@ -79,10 +79,13 @@ print(f\"{d['dateTime'][:10]}  {d['captureParams']['exposure']:.0f}s  {d['stacke
         matches+=("$dir")
         echo "  [${#matches[@]}] $(basename "$dir")"
         [ -n "$info" ] && echo "      $info"
-    done < <(find "$ORIGIN_BASE" -maxdepth 1 -type d -name "${TARGET_NAME}*" | sort)
+    done < <(find "$ORIGIN_BASE" -maxdepth 1 -type d -name "*${TARGET_NAME}*" | sort)
 
     if [ ${#matches[@]} -eq 0 ]; then
         echo "No matching directories found for '$TARGET_NAME'"
+        echo ""
+        echo "Available targets in $ORIGIN_BASE:"
+        ls -1 "$ORIGIN_BASE" | sed 's/_20[0-9][0-9]-.*//' | sort -u | sed 's/^/  /'
         exit 1
     fi
 
